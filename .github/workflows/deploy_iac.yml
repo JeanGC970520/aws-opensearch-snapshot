@@ -77,6 +77,11 @@ jobs:
             --query 'Vpcs[0].VpcId' \
             --output text)
           
+          VPC_CIDR=$(aws ec2 describe-vpcs \
+            --vpc-ids $DEFAULT_VPC \
+            --query 'Vpcs[0].CidrBlock' \
+            --output text)
+          
           SUBNET_IDS=$(aws ec2 describe-subnets \
             --filters "Name=vpc-id,Values=$DEFAULT_VPC" \
             --query 'Subnets[?MapPublicIpOnLaunch==`false`].[SubnetId]' \
