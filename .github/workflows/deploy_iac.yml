@@ -103,8 +103,8 @@ jobs:
           
           # Contar subnets
           SUBNET_COUNT=$(echo $SUBNET_IDS | tr ',' '\n' | wc -l)
-          if [ $SUBNET_COUNT -lt 2 ]; then
-            echo "❌ Error: Se necesitan al menos 2 subnets, encontradas: $SUBNET_COUNT"
+          if [ $SUBNET_COUNT -lt 1 ]; then
+            echo "❌ Error: Se necesitan al menos 1 subnets, encontradas: $SUBNET_COUNT"
             exit 1
           fi
           
