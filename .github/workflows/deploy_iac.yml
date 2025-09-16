@@ -40,12 +40,12 @@ jobs:
       - name: Validate OpenSearch template
         run: |
           aws cloudformation validate-template \
-            --template-body file://cloudformation/Stack-OpenSearch.yaml
+            --template-body file://cloudformation/Stack-OpenSearch.yml
             
       - name: Validate Lambda template
         run: |
           aws cloudformation validate-template \
-            --template-body file://cloudformation/Stack-Lambda.yaml
+            --template-body file://cloudformation/Stack-Lambda.yml
 
   deploy-infrastructure:
     runs-on: ubuntu-latest
@@ -101,7 +101,7 @@ jobs:
         uses: aws-actions/aws-cloudformation-github-deploy@v1
         with:
           name: ${{ env.OPENSEARCH_STACK_NAME }}
-          template: cloudformation/Stack-OpenSearch.yaml
+          template: cloudformation/Stack-OpenSearch.yml
           no-fail-on-empty-changeset: "1"
           parameter-overrides: |
             VPCId=${{ steps.vpc-info.outputs.vpc-id }}
@@ -128,7 +128,7 @@ jobs:
         uses: aws-actions/aws-cloudformation-github-deploy@v1
         with:
           name: ${{ env.LAMBDA_STACK_NAME }}
-          template: cloudformation/Stack-Lambda.yaml
+          template: cloudformation/Stack-Lambda.yml
           no-fail-on-empty-changeset: "1"
           parameter-overrides: |
             OpenSearchStackName=${{ env.OPENSEARCH_STACK_NAME }}
