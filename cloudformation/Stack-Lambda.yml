@@ -71,7 +71,7 @@ Resources:
         Variables:
           OPENSEARCH_ENDPOINT:
             Fn::ImportValue: !Sub 'OpenSearch-Endpoint'
-          AWS_REGION: !Sub '${AWS::Region}'
+          REGION: !Sub '${AWS::Region}'
       Code:
         ZipFile: |
           import json
@@ -82,7 +82,7 @@ Resources:
 
           def handler(event, context):
               endpoint = os.environ['OPENSEARCH_ENDPOINT']
-              region = os.environ['AWS_REGION']
+              region = os.environ['REGION']
               
               # Configurar autenticación AWS
               auth = BotoAWSRequestsAuth(
