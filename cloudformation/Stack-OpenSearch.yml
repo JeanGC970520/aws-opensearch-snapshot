@@ -23,7 +23,7 @@ Resources:
       VpcId: !Ref VPCId
 
   OpenSearchDomain:
-    Type: AWS::OpenSearch::Domain
+    Type: AWS::OpenSearchService::Domain
     Properties:
       DomainName: !Ref DomainName
       EngineVersion: 'OpenSearch_2.3'
