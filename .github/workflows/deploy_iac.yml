@@ -1,0 +1,186 @@
+name: Deploy AWS Infrastructure with CloudFormation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'cloudformation/**'  # Solo ejecutar cuando cambien los templates
+      - '.github/workflows/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'cloudformation/**'
+  workflow_dispatch:  # Permite ejecución manual
+
+env:
+  AWS_REGION: us-east-1  # Cambia por tu región
+  OPENSEARCH_STACK_NAME: Stack-OpenSearch
+  LAMBDA_STACK_NAME: Stack-Lambda
+
+jobs:
+  validate-templates:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4  # Versión más reciente
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4  # Versión actualizada
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Validation
+          
+      - name: Validate OpenSearch template
+        run: |
+          aws cloudformation validate-template \
+            --template-body file://cloudformation/Stack-OpenSearch.yaml
+            
+      - name: Validate Lambda template
+        run: |
+          aws cloudformation validate-template \
+            --template-body file://cloudformation/Stack-Lambda.yaml
+
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    needs: validate-templates
+    permissions:
+      id-token: write
+      contents: read
+    
+    # Solo deployar en main, no en PRs
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Deploy
+          
+      # Obtener información de VPC y subnets por defecto
+      - name: Get default VPC info
+        id: vpc-info
+        run: |
+          DEFAULT_VPC=$(aws ec2 describe-vpcs \
+            --filters "Name=is-default,Values=true" \
+            --query 'Vpcs[0].VpcId' \
+            --output text)
+          
+          SUBNET_IDS=$(aws ec2 describe-subnets \
+            --filters "Name=vpc-id,Values=$DEFAULT_VPC" \
+            --query 'Subnets[?MapPublicIpOnLaunch==`false`].[SubnetId]' \
+            --output text | tr '\n' ',' | sed 's/,$//')
+            
+          # Si no hay subnets privadas, usar las públicas
+          if [ -z "$SUBNET_IDS" ]; then
+            SUBNET_IDS=$(aws ec2 describe-subnets \
+              --filters "Name=vpc-id,Values=$DEFAULT_VPC" \
+              --query 'Subnets[0:2].SubnetId' \
+              --output text | tr '\t' ',')
+          fi
+          
+          echo "vpc-id=$DEFAULT_VPC" >> $GITHUB_OUTPUT
+          echo "subnet-ids=$SUBNET_IDS" >> $GITHUB_OUTPUT
+          
+          echo "🔍 Using VPC: $DEFAULT_VPC"
+          echo "🔍 Using Subnets: $SUBNET_IDS"
+
+      # Deploy OpenSearch first
+      - name: Deploy OpenSearch Stack
+        uses: aws-actions/aws-cloudformation-github-deploy@v1
+        with:
+          name: ${{ env.OPENSEARCH_STACK_NAME }}
+          template: cloudformation/Stack-OpenSearch.yaml
+          no-fail-on-empty-changeset: "1"
+          parameter-overrides: |
+            VPCId=${{ steps.vpc-info.outputs.vpc-id }}
+            SubnetIds=${{ steps.vpc-info.outputs.subnet-ids }}
+            DomainName=my-opensearch-${{ github.run_number }}
+          capabilities: CAPABILITY_IAM
+          tags: |
+            Environment=production
+            Project=opensearch-lambda
+            ManagedBy=github-actions
+            
+      # Wait for OpenSearch to be ready
+      - name: Wait for OpenSearch deployment
+        run: |
+          echo "⏳ Waiting for OpenSearch stack to complete..."
+          aws cloudformation wait stack-create-complete \
+            --stack-name ${{ env.OPENSEARCH_STACK_NAME }} || \
+          aws cloudformation wait stack-update-complete \
+            --stack-name ${{ env.OPENSEARCH_STACK_NAME }}
+          echo "✅ OpenSearch stack is ready"
+
+      # Deploy Lambda stack
+      - name: Deploy Lambda Stack
+        uses: aws-actions/aws-cloudformation-github-deploy@v1
+        with:
+          name: ${{ env.LAMBDA_STACK_NAME }}
+          template: cloudformation/Stack-Lambda.yaml
+          no-fail-on-empty-changeset: "1"
+          parameter-overrides: |
+            OpenSearchStackName=${{ env.OPENSEARCH_STACK_NAME }}
+            VPCId=${{ steps.vpc-info.outputs.vpc-id }}
+            SubnetIds=${{ steps.vpc-info.outputs.subnet-ids }}
+            FunctionName=opensearch-lambda-${{ github.run_number }}
+          capabilities: CAPABILITY_IAM
+          tags: |
+            Environment=production
+            Project=opensearch-lambda
+            ManagedBy=github-actions
+            
+      # Test the deployment
+      - name: Test Lambda function
+        run: |
+          echo "🧪 Testing Lambda function..."
+          FUNCTION_NAME=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.LAMBDA_STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`LambdaArn`].OutputValue' \
+            --output text | cut -d':' -f7)
+            
+          aws lambda invoke \
+            --function-name $FUNCTION_NAME \
+            --payload '{}' \
+            response.json
+            
+          echo "📄 Lambda response:"
+          cat response.json
+          
+      # Output important information
+      - name: Show deployment info
+        run: |
+          echo "🎉 Deployment completed successfully!"
+          echo "📋 Stack Information:"
+          
+          OPENSEARCH_ENDPOINT=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.OPENSEARCH_STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`OpenSearchEndpoint`].OutputValue' \
+            --output text)
+            
+          LAMBDA_ARN=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.LAMBDA_STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`LambdaArn`].OutputValue' \
+            --output text)
+            
+          echo "🔍 OpenSearch Endpoint: $OPENSEARCH_ENDPOINT"
+          echo "⚡ Lambda ARN: $LAMBDA_ARN"
+          
+          # Save to GitHub summary
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| OpenSearch Endpoint | \`$OPENSEARCH_ENDPOINT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lambda ARN | \`$LAMBDA_ARN\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deployment Time | $(date) |" >> $GITHUB_STEP_SUMMARY
