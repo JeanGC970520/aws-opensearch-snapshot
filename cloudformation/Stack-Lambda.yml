@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Lambda function connected to OpenSearch'
+
+Parameters:
+  VPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: 'Same VPC used for OpenSearch'
+    
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: 'Subnets for Lambda (can be same as OpenSearch)'
+    
+  FunctionName:
+    Type: String
+    Default: 'opensearch-lambda'
+
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: OpenSearchAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - es:*
+                Resource: 
+                  Fn::ImportValue: !Sub 'OpenSearch-Arn'
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Lambda security group'
+      VpcId: !Ref VPCId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          DestinationSecurityGroupId:
+            Fn::ImportValue: !Sub 'OpenSearch-SecurityGroup'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'AWS APIs access'
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref FunctionName
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 300
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds: !Ref SubnetIds
+      Environment:
+        Variables:
+          OPENSEARCH_ENDPOINT:
+            Fn::ImportValue: !Sub 'OpenSearch-Endpoint'
+          AWS_REGION: !Sub '${AwsRegion}'
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          from opensearchpy import OpenSearch, RequestsHttpConnection
+          from aws_requests_auth.boto_utils import BotoAWSRequestsAuth
+
+          def handler(event, context):
+              endpoint = os.environ['OPENSEARCH_ENDPOINT']
+              region = os.environ['AWS_REGION']
+              
+              # Configurar autenticación AWS
+              auth = BotoAWSRequestsAuth(
+                  aws_host=endpoint.replace('https://', ''),
+                  aws_region=region,
+                  aws_service='es'
+              )
+              
+              # Cliente OpenSearch
+              client = OpenSearch(
+                  hosts=[endpoint],
+                  http_auth=auth,
+                  use_ssl=True,
+                  verify_certs=True,
+                  connection_class=RequestsHttpConnection
+              )
+              
+              try:
+                  # Ejemplo: obtener info del cluster
+                  info = client.info()
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'message': 'Conexión exitosa',
+                          'cluster_info': info
+                      })
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+Outputs:
+  LambdaArn:
+    Value: !GetAtt LambdaFunction.Arn

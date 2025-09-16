@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: OpenSearchServiceDomain resource
+Parameters:
+  VPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: 'Select the default VPC'
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: 'Select 2 or more subnets from the default VPC'
+
+  DomainName:
+    Type: String
+    Default: 'my-opensearch'
+    Description: 'OpenSearch domain name'
+
+Resources:
+  OpenSearchDomain:
+    Type: AWS::OpenSearch::Domain
+    Properties:
+      DomainName: !Ref DomainName
+      EngineVersion: 'OpenSearch_2.3'
+      ClusterConfig:
+        InstanceType: 't3.small.search'
+        InstanceCount: 1
+      EBSOptions:
+        EBSEnabled: true
+        VolumeType: 'gp3'
+        VolumeSize: 20
+      VPCOptions:
+        SecurityGroupIds:
+          - !Ref OpenSearchDomainSecurityGroup
+        SubnetIds: !Ref SubnetIds
+      AccessPolicies:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: '*'
+            Action: 'es:*'
+            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/*'
+
+  OpenSearchDomainSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for OpenSearch'
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref OpenSearchDomainSecurityGroup
+          Description: 'Self-reference for Lambda access'
+
+Outputs:
+  OpenSearchEndpoint:
+    Value: !Sub 'https://${OpenSearchDomain.DomainEndpoint}'
+    Export:
+      Name: !Sub 'OpenSearch-Endpoint'
+
+  OpenSearchArn:
+    Value: !GetAtt OpenSearchDomain.DomainArn
+    Export:
+      Name: !Sub 'OpenSearch-Arn'
+
+  OpenSearchDomainSecurityGroupId:
+    Value: !Ref OpenSearchDomainSecurityGroup
+    Export:
+      Name: !Sub 'OpenSearch-SecurityGroup'
+
+  VPCId:
+    Value: !Ref VPCId
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC'
