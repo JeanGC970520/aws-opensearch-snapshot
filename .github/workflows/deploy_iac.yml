@@ -151,7 +151,6 @@ jobs:
           template: cloudformation/Stack-Lambda.yml
           no-fail-on-empty-changeset: "1"
           parameter-overrides: >-
-            OpenSearchStackName=${{ env.OPENSEARCH_STACK_NAME }},
             VPCId=${{ steps.vpc-info.outputs.vpc-id }},
             SubnetIds="${{ steps.vpc-info.outputs.subnet-ids }}",
             FunctionName='opensearch-lambda'
