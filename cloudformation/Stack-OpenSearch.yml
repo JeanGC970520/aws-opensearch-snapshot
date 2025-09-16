@@ -16,6 +16,18 @@ Parameters:
     Description: 'OpenSearch domain name'
 
 Resources:
+  OpenSearchDomainSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for OpenSearch'
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref OpenSearchDomainSecurityGroup
+          Description: 'Self-reference for Lambda access'
+
   OpenSearchDomain:
     Type: AWS::OpenSearch::Domain
     Properties:
@@ -40,18 +52,6 @@ Resources:
               AWS: '*'
             Action: 'es:*'
             Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/*'
-
-  OpenSearchDomainSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for OpenSearch'
-      VpcId: !Ref VPCId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          SourceSecurityGroupId: !Ref OpenSearchDomainSecurityGroup
-          Description: 'Self-reference for Lambda access'
 
 Outputs:
   OpenSearchEndpoint:
