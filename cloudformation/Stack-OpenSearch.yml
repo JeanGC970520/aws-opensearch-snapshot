@@ -29,7 +29,7 @@ Resources:
       EngineVersion: 'OpenSearch_2.3'
       ClusterConfig:
         InstanceType: 't3.small.search'
-        InstanceCount: 1
+        InstanceCount: 2
       EBSOptions:
         EBSEnabled: true
         VolumeType: 'gp3'
