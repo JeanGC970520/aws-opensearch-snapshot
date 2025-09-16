@@ -71,7 +71,7 @@ Resources:
         Variables:
           OPENSEARCH_ENDPOINT:
             Fn::ImportValue: !Sub 'OpenSearch-Endpoint'
-          AWS_REGION: !Sub '${AwsRegion}'
+          AWS_REGION: !Sub '${AWS::Region}'
       Code:
         ZipFile: |
           import json
