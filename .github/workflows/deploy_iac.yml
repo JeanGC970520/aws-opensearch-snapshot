@@ -90,11 +90,26 @@ jobs:
               --output text | tr '\t' ',')
           fi
           
+          # Validar que tenemos subnets
+          if [ -z "$SUBNET_IDS" ] || [ "$SUBNET_IDS" = "None" ]; then
+            echo "❌ Error: No se encontraron subnets en la VPC $DEFAULT_VPC"
+            exit 1
+          fi
+          
+          # Contar subnets
+          SUBNET_COUNT=$(echo $SUBNET_IDS | tr ',' '\n' | wc -l)
+          if [ $SUBNET_COUNT -lt 2 ]; then
+            echo "❌ Error: Se necesitan al menos 2 subnets, encontradas: $SUBNET_COUNT"
+            exit 1
+          fi
+          
           echo "vpc-id=$DEFAULT_VPC" >> $GITHUB_OUTPUT
+          echo "vpc-cidr=$VPC_CIDR" >> $GITHUB_OUTPUT
           echo "subnet-ids=$SUBNET_IDS" >> $GITHUB_OUTPUT
           
           echo "🔍 Using VPC: $DEFAULT_VPC"
-          echo "🔍 Using Subnets: $SUBNET_IDS"
+          echo "🔍 Using VPC CIDR: $VPC_CIDR"
+          echo "🔍 Using Subnets: $SUBNET_IDS (Count: $SUBNET_COUNT)"
 
       # Deploy OpenSearch first
       - name: Deploy OpenSearch Stack
@@ -103,10 +118,10 @@ jobs:
           name: ${{ env.OPENSEARCH_STACK_NAME }}
           template: cloudformation/Stack-OpenSearch.yml
           no-fail-on-empty-changeset: "1"
-          parameter-overrides: |
-            VPCId=${{ steps.vpc-info.outputs.vpc-id }}
-            SubnetIds=${{ steps.vpc-info.outputs.subnet-ids }}
-            DomainName=my-opensearch-${{ github.run_number }}
+          parameter-overrides: >-
+            VPCId=${{ steps.vpc-info.outputs.vpc-id }},
+            SubnetIds="${{ steps.vpc-info.outputs.subnet-ids }}",
+            DomainName='my-opensearch'
           capabilities: CAPABILITY_IAM
           tags: |
             Environment=production
@@ -130,11 +145,11 @@ jobs:
           name: ${{ env.LAMBDA_STACK_NAME }}
           template: cloudformation/Stack-Lambda.yml
           no-fail-on-empty-changeset: "1"
-          parameter-overrides: |
-            OpenSearchStackName=${{ env.OPENSEARCH_STACK_NAME }}
-            VPCId=${{ steps.vpc-info.outputs.vpc-id }}
-            SubnetIds=${{ steps.vpc-info.outputs.subnet-ids }}
-            FunctionName=opensearch-lambda-${{ github.run_number }}
+          parameter-overrides: >-
+            OpenSearchStackName=${{ env.OPENSEARCH_STACK_NAME }},
+            VPCId=${{ steps.vpc-info.outputs.vpc-id }},
+            SubnetIds="${{ steps.vpc-info.outputs.subnet-ids }}",
+            FunctionName='opensearch-lambda'
           capabilities: CAPABILITY_IAM
           tags: |
             Environment=production
