@@ -91,7 +91,7 @@ jobs:
           if [ -z "$SUBNET_IDS" ]; then
             SUBNET_IDS=$(aws ec2 describe-subnets \
               --filters "Name=vpc-id,Values=$DEFAULT_VPC" \
-              --query 'Subnets[0:2].SubnetId' \
+              --query 'Subnets[0:1].SubnetId' \
               --output text | tr '\t' ',')
           fi
           
