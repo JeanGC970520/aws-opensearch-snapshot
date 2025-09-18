@@ -28,7 +28,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
       Policies:
-        - PolicyName: OpenSearchAccess
+        - PolicyName: LambdaExecutionRole
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -36,7 +36,16 @@ Resources:
                 Action:
                   - es:*
                 Resource: 
-                  Fn::ImportValue: !Sub 'OpenSearch-Arn'
+                  - Fn::ImportValue: !Sub "OpenSearch-Arn"
+                  - !Join [ "/", [ Fn::ImportValue: !Sub "OpenSearch-Arn", '*' ] ]
+              - Effect: Allow
+                Action:
+                  - "s3:*"
+                Resource: !Sub "arn:aws:s3:::dev-data-*"
+              - Effect: Allow
+                Action:
+                  - "iam:PassRole"
+                Resource: Fn:ImportValue: !Sub "OpenSearch-AssumeRoleArn"
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -72,50 +81,153 @@ Resources:
           OPENSEARCH_ENDPOINT:
             Fn::ImportValue: !Sub 'OpenSearch-Endpoint'
           REGION: !Sub '${AWS::Region}'
+          OPENSEARCH_MASTER_USER: 'OPENSEARCH_MASTER_USER'
       Code:
         ZipFile: |
+          from __future__ import print_function
           import json
-          import os
           import boto3
-          from opensearchpy import OpenSearch, RequestsHttpConnection
-          from aws_requests_auth.boto_utils import BotoAWSRequestsAuth
+          from botocore.exceptions import ClientError
+          import requests
+          from requests.auth import HTTPBasicAuth
+          import os
+
+          SUCCESS = "SUCCESS"
+          FAILED = "FAILED"
+
+          print('Loading function')
 
           def handler(event, context):
               endpoint = os.environ['OPENSEARCH_ENDPOINT']
               region = os.environ['REGION']
-              
-              # Configurar autenticación AWS
-              auth = BotoAWSRequestsAuth(
-                  aws_host=endpoint.replace('https://', ''),
-                  aws_region=region,
-                  aws_service='es'
-              )
-              
-              # Cliente OpenSearch
-              client = OpenSearch(
-                  hosts=[endpoint],
-                  http_auth=auth,
-                  use_ssl=True,
-                  verify_certs=True,
-                  connection_class=RequestsHttpConnection
-              )
+
+              # Variables
+              action = event['action']
+
+              # URL OpenSearch
+              opensearchHost = 'https://' + opensearchEndpoint 
+
+              # Get Master User/Pass Opensearch
+              opensearch_master_user = get_secret(os.environ['OPENSEARCH_MASTER_USER'])
+              secret_json = json.loads(opensearch_master_user)
+              opensearchUser = secret_json.get('Username')
+              opensearchPass = secret_json.get('Password')
+
+              # Dictionary with the allowed actions and their parameters
+              actions = {
+                  "list": (list_snapshots, [opensearchHost, opensearchUser, opensearchPass]),
+                  "register_repository": (register_repository_for_snapshot, [opensearchHost, opensearchUser, opensearchPass, event.get('repository'), event.get('region'), event.get('role_arn')]),
+                  "take_snapshot": (take_snapshot, [opensearchHost, opensearchUser, opensearchPass, event.get('repository')]),
+                  "get_info_automatic_repo": (get_existing_repo_config,[opensearchHost, opensearchUser, opensearchPass])
+              }
               
               try:
-                  # Ejemplo: obtener info del cluster
-                  info = client.info()
-                  
-                  return {
-                      'statusCode': 200,
-                      'body': json.dumps({
-                          'message': 'Conexión exitosa',
-                          'cluster_info': info
-                      })
-                  }
+                  # Get the function and parameters from the dictionary and call the function
+                  func, params = actions.get(action, (None, None))
+                  if func:
+                      func(*params)
+                  else:
+                      raise Exception(f"Error: Action '{action}' not permitted.")
+                  responseStatus = 'SUCCESS'
               except Exception as e:
-                  return {
-                      'statusCode': 500,
-                      'body': json.dumps({'error': str(e)})
+                  print('Failed to process:', e)
+                  responseStatus = 'FAILED'
+
+          def get_secret(secret_name):
+              # Get the secret from Secrets Manager
+              try:
+                  get_secret_value_response = secretsmanager.get_secret_value(SecretId=secret_name)
+              except ClientError as e:
+                  raise e
+              secret = get_secret_value_response['SecretString']
+              return secret
+
+          def list_snapshots(opensearchHost, opensearchUser, opensearchPass):
+              # The following request retrieves all snapshots from the cs-automated-enc repository
+              url = f'{opensearchHost}/_snapshot/cs-automated-enc/_all?pretty'
+              r = requests.get(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+              print(r.status_code)
+              snapshot_info = r.json()
+              # Initialize an empty list to store snapshots with desired fields
+              snapshots_list = []
+              # Iterate through each snapshot
+              snapshots = snapshot_info.get('snapshots', [])
+              for snapshot in snapshots:
+                  snapshot_name = snapshot.get('snapshot')
+                  indices = snapshot.get('indices', [])
+                  state = snapshot.get('state')
+                  # Filter indices that do not start with a dot
+                  filtered_indices = [index for index in indices if not index.startswith('.')]
+                  # Create a dictionary with desired fields
+                  snapshot_data = {
+                      'snapshot': snapshot_name,
+                      'indices': filtered_indices,
+                      'state': state
                   }
+                  # Append the snapshot data to the list
+                  snapshots_list.append(snapshot_data)
+              # Print the list of snapshots with desired fields
+              for snapshot_data in snapshots_list:
+                  print(snapshot_data)
+
+          def register_repository_for_snapshot(opensearchHost, opensearchUser, opensearchPass, repository, region, iamRole):
+              payload = {
+                  "type": "s3",
+                  "settings": {
+                      "bucket": repository,
+                      "region": region,
+                      "role_arn": iamRole,
+                      "base_path": "opensearch/snapshots",
+                  }
+              }
+              headers = {"Content-Type": "application/json"}
+              url = opensearchHost + '/_snapshot/' + 'genai-snapshots'
+              r = requests.put(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass), json=payload, headers=headers)
+              r.raise_for_status()
+
+              print(r.status_code)
+              print(r.text)
+
+          def validate_before_register(opensearchHost, opensearchUser, opensearchPass, bucket_name, region, role_arn):
+              # 1. Verificar que el bucket existe y es accesible
+              import boto3
+              s3_client = boto3.client('s3', region_name=region)
+              
+              try:
+                  s3_client.head_bucket(Bucket=bucket_name)
+                  print(f"✅ Bucket {bucket_name} existe y es accesible")
+              except Exception as e:
+                  print(f"❌ Error con bucket: {e}")
+                  return False
+              
+              # 2. Verificar que el rol ARN es válido
+              iam_client = boto3.client('iam', region_name=region)
+              try:
+                  role_name = role_arn.split('/')[-1]
+                  iam_client.get_role(RoleName=role_name)
+                  print(f"✅ Rol {role_name} existe")
+              except Exception as e:
+                  print(f"❌ Error con rol: {e}")
+                  return False
+              
+              # 3. Ahora intentar registrar el repositorio
+              return register_repository_simple(opensearchHost, opensearchUser, opensearchPass, region, role_arn)
+
+          def take_snapshot(opensearchHost, opensearchUser, opensearchPass, repository):
+
+              snapshot_name = datetime.date.today().strftime("%Y-%m-%d")
+              url = f'{opensearchHost}/_snapshot/genai-snapshots/{snapshot_name}'
+              r = requests.put(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+              r.raise_for_status()
+
+              print(r.status_code)
+              print(r.text)
+
+          def get_existing_repo_config(opensearchHost, opensearchUser, opensearchPass):
+              url = f"{opensearchHost}/_snapshot/cs-automated-enc"
+              r = requests.get(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+              print(f"Existing repo config: {r.text}")
+              return r
 
 Outputs:
   LambdaArn:
