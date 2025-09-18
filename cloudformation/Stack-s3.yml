@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Bucket S3 general porpuse
+
+Resources:
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub "dev-data-general-${AWS::Region}"
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Deny POST or presigned URL requests
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Sub "arn:aws:s3:::dev-data-general-${AWS::Region}/*"
+            Condition:
+              StringNotEquals:
+                's3:authType': "REST-HEADER"
+          - Sid: EnforceEncryptionInTransit
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub "arn:aws:s3:::dev-data-general-${AWS::Region}"
+              - !Sub "arn:aws:s3:::dev-data-general-${AWS::Region}/*"
+            Condition:
+              Bool:
+                'aws:SecureTransport': "false"
