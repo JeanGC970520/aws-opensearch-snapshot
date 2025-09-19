@@ -111,7 +111,8 @@ jobs:
           
           # Obtener información del secreto usando el ARN (sin comillas simples)
           SECRET_VALUE_OUT=$(aws secretsmanager describe-secret \
-            --secret-id "$ARN_SECRET")
+            --secret-id "$ARN_SECRET" \
+            --output json)
           
           echo "SECRET_INFO:"
           echo "$SECRET_VALUE_OUT"
