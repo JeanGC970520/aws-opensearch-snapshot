@@ -124,10 +124,6 @@ jobs:
 
       - name: Debug Output
         run: |
-          echo "=== Verificando output del step anterior ==="
-          echo "Longitud del output: ${{ length(steps.opensearch_info.outputs.secret_info) }}"
-          echo "Primeros 100 caracteres:"
-          echo "${{ substring(steps.opensearch_info.outputs.secret_info, 0, 100) }}"
           echo "=== Contenido completo ==="
           echo '${{ steps.opensearch_info.outputs.secret_info }}'
           echo "=== Fin contenido ==="
