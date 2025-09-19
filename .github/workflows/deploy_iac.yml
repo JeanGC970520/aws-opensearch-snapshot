@@ -67,7 +67,20 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Deploy
-          
+
+      # Secrets Manager
+      - name: Deploy Secrets Manager Stack
+        uses: aws-actions/aws-cloudformation-github-deploy@v1
+        with:
+          name: ${{ env.OPENSEARCH_STACK_NAME }}
+          template: cloudformation/Stack-secret-manager.yml
+          no-fail-on-empty-changeset: "1"
+          capabilities: CAPABILITY_IAM
+          tags: |
+            Environment=production
+            Project=opensearch-lambda
+            ManagedBy=github-actions
+      
       # Obtener información de VPC y subnets por defecto
       - name: Get default VPC info
         id: vpc-info
@@ -133,6 +146,16 @@ jobs:
             Project=opensearch-lambda
             ManagedBy=github-actions
 
+      # Wait for OpenSearch to be ready
+      - name: Wait for OpenSearch deployment
+        run: |
+          echo "⏳ Waiting for OpenSearch stack to complete..."
+          aws cloudformation wait stack-create-complete \
+            --stack-name ${{ env.OPENSEARCH_STACK_NAME }} || \
+          aws cloudformation wait stack-update-complete \
+            --stack-name ${{ env.OPENSEARCH_STACK_NAME }}
+          echo "✅ OpenSearch stack is ready"
+
       # Deploy S3 bucket
       - name: Deploy S3 Stack
         uses: aws-actions/aws-cloudformation-github-deploy@v1
@@ -146,19 +169,7 @@ jobs:
             Project=opensearch-lambda
             ManagedBy=github-actions
 
-      # Deploy S3 bucket
-      - name: Deploy Secrets Manager Stack
-        uses: aws-actions/aws-cloudformation-github-deploy@v1
-        with:
-          name: ${{ env.OPENSEARCH_STACK_NAME }}
-          template: cloudformation/Stack-secret-manager.yml
-          no-fail-on-empty-changeset: "1"
-          capabilities: CAPABILITY_IAM
-          tags: |
-            Environment=production
-            Project=opensearch-lambda
-            ManagedBy=github-actions
-
+      # Put value on Secret Manager
       - name: Check secret about master user info
         id: opensearch_info
         run: |
@@ -182,16 +193,6 @@ jobs:
             }
           secret-name: 'OPENSEARCH_MASTER_USER'
         if: ${{ !contains(fromJSON(steps.opensearch_info.secret_info), 'AWSCURRENT') }}
-            
-      # Wait for OpenSearch to be ready
-      - name: Wait for OpenSearch deployment
-        run: |
-          echo "⏳ Waiting for OpenSearch stack to complete..."
-          aws cloudformation wait stack-create-complete \
-            --stack-name ${{ env.OPENSEARCH_STACK_NAME }} || \
-          aws cloudformation wait stack-update-complete \
-            --stack-name ${{ env.OPENSEARCH_STACK_NAME }}
-          echo "✅ OpenSearch stack is ready"
 
       # Deploy Lambda stack
       - name: Deploy Lambda Stack
