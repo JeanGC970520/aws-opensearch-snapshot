@@ -98,7 +98,7 @@ jobs:
         id: opensearch_info
         run: |
           ARN_SECRET=$(aws secretsmanager list-secrets \
-            --query \"SecretList[?contains(Name, 'OPENSEARCH_MASTER_USER')].ARN\" \
+            --query "SecretList[?contains(Name, 'OPENSEARCH_MASTER_USER')].ARN" \
             --output text)
 
           SECRET_VALUE_OUT=$(aws secretsmanager describe-secret \
