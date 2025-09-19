@@ -101,10 +101,20 @@ jobs:
             --query "SecretList[?contains(Name, 'OPENSEARCH_MASTER_USER')].ARN" \
             --output text)
 
-          echo "AR_SECRET -> $ARN_SECRET"
-
+          echo "ARN_SECRET -> $ARN_SECRET"
+    
+          # Verificar que se obtuvo un ARN
+          if [ -z "$ARN_SECRET" ]; then
+            echo "Error: No se encontró ningún secreto que contenga 'OPENSEARCH_MASTER_USER'"
+            exit 1
+          fi
+          
+          # Obtener información del secreto usando el ARN (sin comillas simples)
           SECRET_VALUE_OUT=$(aws secretsmanager describe-secret \
-            --secret-id '${ARN_SECRET}')
+            --secret-id "$ARN_SECRET")
+          
+          echo "SECRET_INFO:"
+          echo "$SECRET_VALUE_OUT"
 
           echo "secret_info=$SECRET_VALUE_OUT" >> "$GITHUB_OUTPUT"
 
