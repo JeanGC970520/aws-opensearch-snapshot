@@ -122,6 +122,31 @@ jobs:
           echo "$SECRET_VALUE_OUT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Debug Output
+        run: |
+          echo "=== Verificando output del step anterior ==="
+          echo "Longitud del output: ${{ length(steps.opensearch_info.outputs.secret_info) }}"
+          echo "Primeros 100 caracteres:"
+          echo "${{ substring(steps.opensearch_info.outputs.secret_info, 0, 100) }}"
+          echo "=== Contenido completo ==="
+          echo '${{ steps.opensearch_info.outputs.secret_info }}'
+          echo "=== Fin contenido ==="
+
+          SECRET_JSON='${{ steps.opensearch_info.outputs.secret_info }}'
+    
+          # Verificar que no esté vacío
+          if [ -z "$SECRET_JSON" ]; then
+            echo "❌ ERROR: secret_info output is empty"
+            exit 1
+          fi
+          
+          # Verificar que sea JSON válido
+          echo "$SECRET_JSON" | jq . > /dev/null || {
+            echo "❌ ERROR: secret_info is not valid JSON"
+            echo "Content received: $SECRET_JSON"
+            exit 1
+          }
+
       - name: Generate ans store master user info
         uses: ./.github/actions/update-aws-secret
         with:
