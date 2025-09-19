@@ -92,6 +92,31 @@ jobs:
             Environment=production
             Project=opensearch-lambda
             ManagedBy=github-actions
+
+      # Put value on Secret Manager
+      - name: Check secret about master user info
+        id: opensearch_info
+        run: |
+          ARN_SECRET=$(aws secretsmanager list-secrets \
+            --query \"SecretList[?contains(Name, 'OPENSEARCH_MASTER_USER')].ARN\" \
+            --output text)
+
+          SECRET_VALUE_OUT=$(aws secretsmanager describe-secret \
+            --secret-id '${ARN_SECRET}')
+
+          echo "secret_info=$SECRET_VALUE_OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Generate ans store master user info
+        uses: ./.github/actions/update-aws-secret
+        with:
+          secret-arn: ${{ secrets.DB_SECRET_ARN }}
+          secret-content: |
+            {
+              "username": "OpenSearhUserMaster",
+              "password": "Ek#QoSBb&$48bD9GY$nWGx"
+            }
+          secret-name: 'OPENSEARCH_MASTER_USER'
+        if: ${{ !contains(fromJSON(steps.opensearch_info.secret_info), 'AWSCURRENT') }}
       
       # Obtener información de VPC y subnets por defecto
       - name: Get default VPC info
@@ -180,31 +205,6 @@ jobs:
             Environment=production
             Project=opensearch-lambda
             ManagedBy=github-actions
-
-      # Put value on Secret Manager
-      - name: Check secret about master user info
-        id: opensearch_info
-        run: |
-          ARN_SECRET=$(aws secretsmanager list-secrets \
-            --query \"SecretList[?contains(Name, 'OPENSEARCH_MASTER_USER')].ARN\" \
-            --output text)
-
-          SECRET_VALUE_OUT=$(aws secretsmanager describe-secret \
-            --secret-id '${ARN_SECRET}')
-
-          echo "secret_info=$SECRET_VALUE_OUT" >> "$GITHUB_OUTPUT"
-
-      - name: Generate ans store master user info
-        uses: ./.github/actions/update-aws-secret
-        with:
-          secret-arn: ${{ secrets.DB_SECRET_ARN }}
-          secret-content: |
-            {
-              "username": "OpenSearhUserMaster",
-              "password": "Ek#QoSBb&$48bD9GY$nWGx"
-            }
-          secret-name: 'OPENSEARCH_MASTER_USER'
-        if: ${{ !contains(fromJSON(steps.opensearch_info.secret_info), 'AWSCURRENT') }}
 
       # Deploy Lambda stack
       - name: Deploy Lambda Stack
