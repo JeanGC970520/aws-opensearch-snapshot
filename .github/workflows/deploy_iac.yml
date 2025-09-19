@@ -146,7 +146,7 @@ jobs:
       - name: Generate ans store master user info
         uses: ./.github/actions/set_secret
         with:
-          secret-arn: ${{ secrets.DB_SECRET_ARN }}
+          secret-arn: ${{ steps.opensearch_info.outputs.secret_info | jq .ARN }}
           secret-content: |
             {
               "username": "OpenSearhUserMaster",
