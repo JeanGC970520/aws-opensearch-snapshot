@@ -150,10 +150,10 @@ jobs:
         with:
           secret-arn: ${{ steps.opensearch_info.outputs.secret_arn }}
           secret-content: |
-            {
-              "username": "OpenSearhUserMaster",
-              "password": "EkQoSBb48bD9GYnWGx"
-            }
+            "{
+              \"username\": \"OpenSearhUserMaster\",
+              \"password\": \"EkQoSBb48bD9GYnWGx\"
+            }"
           secret-name: 'OPENSEARCH_MASTER_USER'
         if: ${{ !contains(fromJSON(steps.opensearch_info.outputs.secret_info), 'AWSCURRENT') }}
       
