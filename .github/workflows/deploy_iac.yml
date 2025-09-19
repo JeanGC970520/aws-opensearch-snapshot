@@ -16,7 +16,9 @@ on:
 
 env:
   AWS_REGION: us-east-1  # Cambia por tu región
+  SECRET_MANAGER_STACK_NAME: Stack-secret-manager
   OPENSEARCH_STACK_NAME: Stack-OpenSearch
+  S3_STACK_NAME: Stack-s3
   LAMBDA_STACK_NAME: Stack-Lambda
 
 jobs:
@@ -36,11 +38,21 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Validation
-          
+
+      - name: Validate Secret Manager template
+        run: |
+          aws cloudformation validate-template \
+            --template-body file://cloudformation/Stack-secret-manager.yml
+
       - name: Validate OpenSearch template
         run: |
           aws cloudformation validate-template \
             --template-body file://cloudformation/Stack-OpenSearch.yml
+
+      - name: Validate S3 template
+        run: |
+          aws cloudformation validate-template \
+            --template-body file://cloudformation/Stack-s3.yml
             
       - name: Validate Lambda template
         run: |
@@ -72,7 +84,7 @@ jobs:
       - name: Deploy Secrets Manager Stack
         uses: aws-actions/aws-cloudformation-github-deploy@v1
         with:
-          name: ${{ env.OPENSEARCH_STACK_NAME }}
+          name: ${{ env.SECRET_MANAGER_STACK_NAME }}
           template: cloudformation/Stack-secret-manager.yml
           no-fail-on-empty-changeset: "1"
           capabilities: CAPABILITY_IAM
@@ -160,7 +172,7 @@ jobs:
       - name: Deploy S3 Stack
         uses: aws-actions/aws-cloudformation-github-deploy@v1
         with:
-          name: ${{ env.OPENSEARCH_STACK_NAME }}
+          name: ${{ env.S3_STACK_NAME }}
           template: cloudformation/Stack-s3.yml
           no-fail-on-empty-changeset: "1"
           capabilities: CAPABILITY_IAM
