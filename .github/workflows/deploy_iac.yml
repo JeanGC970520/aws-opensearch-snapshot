@@ -101,6 +101,8 @@ jobs:
             --query "SecretList[?contains(Name, 'OPENSEARCH_MASTER_USER')].ARN" \
             --output text)
 
+          echo "AR_SECRET -> $ARN_SECRET"
+
           SECRET_VALUE_OUT=$(aws secretsmanager describe-secret \
             --secret-id '${ARN_SECRET}')
 
