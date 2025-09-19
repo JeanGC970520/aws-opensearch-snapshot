@@ -234,7 +234,7 @@ jobs:
             
           aws lambda invoke \
             --function-name $FUNCTION_NAME \
-            --payload '{}' \
+            --payload '{"action": "list"}' \
             response.json
             
           echo "📄 Lambda response:"
