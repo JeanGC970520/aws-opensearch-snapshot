@@ -117,7 +117,10 @@ jobs:
           echo "SECRET_INFO:"
           echo "$SECRET_VALUE_OUT"
 
-          echo "secret_info=$SECRET_VALUE_OUT" >> "$GITHUB_OUTPUT"
+          # Exportar el JSON completo (escapando caracteres especiales)
+          echo "secret_info<<EOF" >> $GITHUB_OUTPUT
+          echo "$SECRET_VALUE_OUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Generate ans store master user info
         uses: ./.github/actions/update-aws-secret
