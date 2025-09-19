@@ -144,7 +144,7 @@ jobs:
           }
 
       - name: Generate ans store master user info
-        uses: ./.github/actions/update-aws-secret
+        uses: ./.github/actions/set_secret
         with:
           secret-arn: ${{ secrets.DB_SECRET_ARN }}
           secret-content: |
