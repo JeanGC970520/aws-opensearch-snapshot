@@ -153,7 +153,7 @@ jobs:
               "password": "Ek#QoSBb&$48bD9GY$nWGx"
             }
           secret-name: 'OPENSEARCH_MASTER_USER'
-        if: ${{ !contains(fromJSON(steps.opensearch_info.secret_info), 'AWSCURRENT') }}
+        if: ${{ !contains(fromJSON(steps.opensearch_info.outputs.secret_info), 'AWSCURRENT') }}
       
       # Obtener información de VPC y subnets por defecto
       - name: Get default VPC info
