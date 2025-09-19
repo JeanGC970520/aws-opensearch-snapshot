@@ -43,8 +43,8 @@ Resources:
         AnonymousAuthEnabled: false
         InternalUserDatabaseEnabled: true
         MasterUserOptions:
-          MasterUserName: !Join [ "", [ "{{resolve:secretsmanager:", Fn::ImportValue: !Sub "secret-manager-OPENSEARCH-MASTER-USER-arn", ':SecretString:Username}}' ] ]
-          MasterUserPassword: !Join [ "", [ "{{resolve:secretsmanager:", Fn::ImportValue: !Sub "secret-manager-OPENSEARCH-MASTER-USER-arn", ':SecretString:Password}}' ] ]
+          MasterUserName: !Join [ "", [ "{{resolve:secretsmanager:", Fn::ImportValue: !Sub "secret-manager-OPENSEARCH-MASTER-USER-arn", ':SecretString:username}}' ] ]
+          MasterUserPassword: !Join [ "", [ "{{resolve:secretsmanager:", Fn::ImportValue: !Sub "secret-manager-OPENSEARCH-MASTER-USER-arn", ':SecretString:password}}' ] ]
       AccessPolicies:
         Version: '2012-10-17'
         Statement:
