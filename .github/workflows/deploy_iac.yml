@@ -122,6 +122,8 @@ jobs:
           echo "$SECRET_VALUE_OUT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+          echo "secret_arn=$ARN_SECRET" >> $GITHUB_OUTPUT
+
       - name: Debug Output
         run: |
           echo "=== Contenido completo ==="
@@ -146,7 +148,7 @@ jobs:
       - name: Generate ans store master user info
         uses: ./.github/actions/set_secret
         with:
-          secret-arn: ${{ steps.opensearch_info.outputs.secret_info }} | jq .ARN
+          secret-arn: ${{ steps.opensearch_info.outputs.secret_arn }}
           secret-content: |
             {
               "username": "OpenSearhUserMaster",
