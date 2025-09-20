@@ -9,7 +9,6 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub "dev-data-general-${AWS::Region}"
-      AccessControl: Private
       VersioningConfiguration:
         Status: Enabled
 
