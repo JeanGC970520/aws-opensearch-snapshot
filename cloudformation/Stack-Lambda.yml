@@ -109,18 +109,22 @@ Resources:
           OPENSEARCH_MASTER_USER: 'OPENSEARCH_MASTER_USER'
       Code:
         ZipFile: |
-          from __future__ import print_function
+          import os
           import json
           import boto3
-          from botocore.exceptions import ClientError
+          import logging
           import requests
+          from botocore.exceptions import ClientError
           from requests.auth import HTTPBasicAuth
-          import os
+
+          # Configurar logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
 
           SUCCESS = "SUCCESS"
           FAILED = "FAILED"
 
-          print('Loading function')
+          logger.info('Loading function')
 
           # AWS Clients
           secretsmanager = boto3.client('secretsmanager')
@@ -151,7 +155,7 @@ Resources:
                   "list_roles": (list_roles, [opensearchHost, opensearchUser, opensearchPass]),
               }
               
-              print("Received event: {}".format(action))
+              logger.info("Received event: {}".format(action))
               try:
                   # Get the function and parameters from the dictionary and call the function
                   func, params = actions.get(action, (None, None))
@@ -161,12 +165,12 @@ Resources:
                       raise Exception(f"Error: Action '{action}' not permitted.")
                   responseStatus = 'SUCCESS'
               except Exception as e:
-                  print('Failed to process:', e)
+                  logger.error('Failed to process:', e)
                   responseStatus = 'FAILED'
 
           def get_secret(secret_name):
               # Get the secret from Secrets Manager
-              print("Get secret: {}".format(secret_name))
+              logger.info("Get secret: {}".format(secret_name))
               try:
                   get_secret_value_response = secretsmanager.get_secret_value(SecretId=secret_name)
               except ClientError as e:
@@ -177,9 +181,9 @@ Resources:
           def list_snapshots(opensearchHost, opensearchUser, opensearchPass):
               # The following request retrieves all snapshots from the cs-automated-enc repository
               url = f'{opensearchHost}/_snapshot/cs-automated-enc/_all?pretty'
-              r = requests.get(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
-              print(r.status_code)
-              snapshot_info = r.json()
+              response = requests.get(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+              print(response.status_code)
+              snapshot_info = response.json()
               # Initialize an empty list to store snapshots with desired fields
               snapshots_list = []
               # Iterate through each snapshot
@@ -202,6 +206,14 @@ Resources:
               for snapshot_data in snapshots_list:
                   print(snapshot_data)
 
+              return {
+                  'statusCode': response.status_code,
+                  'headers': {
+                      'Content-Type': 'application/json'
+                  },
+                  'body': snapshots_list
+              }
+
           def register_repository_for_snapshot(opensearchHost, opensearchUser, opensearchPass, repository, region, arn_role):
               payload = {
                   "type": "s3",
@@ -214,11 +226,11 @@ Resources:
               }
               headers = {"Content-Type": "application/json"}
               url = opensearchHost + '/_snapshot/' + 'genai-snapshots'
-              r = requests.put(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass), json=payload, headers=headers)
-              r.raise_for_status()
+              response = requests.put(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass), json=payload, headers=headers)
+              response.raise_for_status()
 
-              print(r.status_code)
-              print(r.text)
+              print(response.status_code)
+              print(response.text)
 
           def validate_before_register(opensearchHost, opensearchUser, opensearchPass, bucket_name, region, arn_role):
               # 1. Verificar que el bucket existe y es accesible
@@ -249,18 +261,24 @@ Resources:
 
               snapshot_name = datetime.date.today().strftime("%Y-%m-%d")
               url = f'{opensearchHost}/_snapshot/genai-snapshots/{snapshot_name}'
-              r = requests.put(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
-              r.raise_for_status()
+              response = requests.put(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+              response.raise_for_status()
 
-              print(r.status_code)
-              print(r.text)
+              print(response.status_code)
+              print(response.text)
+              
 
           def get_existing_repo_config(opensearchHost, opensearchUser, opensearchPass):
               url = f"{opensearchHost}/_snapshot/cs-automated-enc"
-              r = requests.get(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
-              print(f"Existing repo config: {r.text}")
-              return r
-
+              response = requests.get(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+              print(f"Existing repo config: {response.text}")
+              return {
+                  'statusCode': response.status_code,
+                  'headers': {
+                      'Content-Type': 'application/json'
+                  },
+                  'body': response.json()
+              }
 
           def list_rolesmapings(opensearchHost, opensearchUser, opensearchPass):
               print("Listing mappings roles")
@@ -269,7 +287,7 @@ Resources:
               print("Response status: {}".format(response.status_code))
               formatted_json_string = response.json()
               return {
-                  'statusCode': 200,
+                  'statusCode': response.status_code,
                   'headers': {
                       'Content-Type': 'application/json'
                   },
@@ -282,8 +300,9 @@ Resources:
               response = requests.get(get_roles_url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
               print("Response status: {}".format(response.status_code))
               formatted_json_string = response.json()
+              print(formatted_json_string)
               return {
-                  'statusCode': 200,
+                  'statusCode': response.status_code,
                   'headers': {
                       'Content-Type': 'application/json'
                   },
