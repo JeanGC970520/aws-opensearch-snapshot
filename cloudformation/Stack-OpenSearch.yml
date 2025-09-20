@@ -85,6 +85,8 @@ Resources:
       EncryptionAtRestOptions:
         Enabled: true
         KmsKeyId: !Ref OpenSearchKMSKey
+      DomainEndpointOptions:
+        EnforceHTTPS: true
       AccessPolicies:
         Version: '2012-10-17'
         Statement:
