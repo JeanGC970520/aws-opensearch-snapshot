@@ -124,8 +124,8 @@ Resources:
               # Get Master User/Pass Opensearch
               opensearch_master_user = get_secret(os.environ['OPENSEARCH_MASTER_USER'])
               secret_json = json.loads(opensearch_master_user)
-              opensearchUser = secret_json.get('Username')
-              opensearchPass = secret_json.get('Password')
+              opensearchUser = secret_json.get('username')
+              opensearchPass = secret_json.get('password')
 
               # Dictionary with the allowed actions and their parameters
               actions = {
