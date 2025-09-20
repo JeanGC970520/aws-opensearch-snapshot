@@ -6,6 +6,12 @@ Parameters:
     Type: AWS::EC2::VPC::Id
     Description: 'Select the default VPC'
 
+  CIDRblock:
+    Type: String
+    Description: The CIDR block for the VPC (e.g., 10.0.0.0/16).
+    Default: 0.0.0.0/0
+    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+
   SubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description: 'Select 2 or more subnets from the default VPC'
@@ -19,8 +25,14 @@ Resources:
   OpenSearchDomainSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for OpenSearch'
+      GroupName: !Sub "OpenSearch-${DomainName}-SecurityGroup"
+      GroupDescription: 'Open Search security group'
       VpcId: !Ref VPCId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref CIDRblock
 
   OpenSearchKMSKey:
     Type: 'AWS::KMS::Key'
@@ -95,17 +107,6 @@ Resources:
               AWS: '*'
             Action: 'es:*'
             Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/*'
-
-  OpenSearchSecurityGroupIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    DependsOn: OpenSearchDomain
-    Properties:
-      GroupId: !Ref OpenSearchDomainSecurityGroup
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      SourceSecurityGroupId: !Ref OpenSearchDomainSecurityGroup
-      Description: 'Allow HTTPS from same security group (for Lambda access)'
   
   OpenSearchAssumeRole:
     Type: AWS::IAM::Role
