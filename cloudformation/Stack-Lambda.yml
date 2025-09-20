@@ -61,7 +61,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - "iam:PassRole"
-                Resource: !Join [ "/", [ !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:security-group", Fn::ImportValue: "OpenSearch-SecurityGroup" ] ]
+                Resource: 
+                  Fn::ImportValue: "OpenSearch-Assume-Role"
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
