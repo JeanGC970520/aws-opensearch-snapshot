@@ -52,16 +52,16 @@ Resources:
                 Action:
                   - es:*
                 Resource: 
-                  - Fn::ImportValue: !Sub "OpenSearch-Arn"
-                  - !Join [ "/", [ Fn::ImportValue: !Sub "OpenSearch-Arn", '*' ] ]
+                  - Fn::ImportValue: "OpenSearch-Arn"
+                  - !Join [ "/", [ Fn::ImportValue: "OpenSearch-Arn", '*' ] ]
               - Effect: Allow
                 Action:
                   - "s3:*"
-                Resource: !Sub "arn:aws:s3:::dev-data-*"
+                Resource: "arn:aws:s3:::dev-data-*"
               - Effect: Allow
                 Action:
                   - "iam:PassRole"
-                Resource: !Join [ "/", [ !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group", Fn::ImportValue: !Sub "OpenSearch-SecurityGroup" ] ]
+                Resource: !Join [ "/", [ !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:security-group", Fn::ImportValue: "OpenSearch-SecurityGroup" ] ]
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -91,7 +91,7 @@ Resources:
       Environment:
         Variables:
           OPENSEARCH_ENDPOINT:
-            Fn::ImportValue: !Sub 'OpenSearch-Endpoint'
+            Fn::ImportValue: 'OpenSearch-Endpoint'
           REGION: !Sub '${AWS::Region}'
           OPENSEARCH_MASTER_USER: 'OPENSEARCH_MASTER_USER'
       Code:
