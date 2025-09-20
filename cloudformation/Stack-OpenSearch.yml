@@ -80,6 +80,8 @@ Resources:
         MasterUserOptions:
           MasterUserName: !Join [ "", [ "{{resolve:secretsmanager:", Fn::ImportValue: !Sub "secret-manager-OPENSEARCH-MASTER-USER-arn", ':SecretString:username}}' ] ]
           MasterUserPassword: !Join [ "", [ "{{resolve:secretsmanager:", Fn::ImportValue: !Sub "secret-manager-OPENSEARCH-MASTER-USER-arn", ':SecretString:password}}' ] ]
+      NodeToNodeEncryptionOptions:
+        Enabled: true
       EncryptionAtRestOptions:
         Enabled: true
         KmsKeyId: !Ref OpenSearchKMSKey

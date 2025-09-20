@@ -145,7 +145,7 @@ jobs:
             exit 1
           }
 
-      - name: Generate ans store master user info
+      - name: Generate and store master user info
         uses: ./.github/actions/set_secret
         with:
           secret-arn: ${{ steps.opensearch_info.outputs.secret_arn }}
