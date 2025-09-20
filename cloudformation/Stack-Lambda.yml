@@ -63,6 +63,12 @@ Resources:
                   - "iam:PassRole"
                 Resource: 
                   Fn::ImportValue: "OpenSearch-Assume-Role"
+              - Effect: Allow
+                Action:
+                  - "secretsmanager:GetSecretValue"
+                Resource:
+                  - Fn::ImportValue: "secret-manager-OPENSEARCH-MASTER-USER-arn"
+                  - !Join [ "/", [ Fn::ImportValue: "secret-manager-OPENSEARCH-MASTER-USER-arn", '*' ] ]
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -145,11 +151,12 @@ Resources:
                   "list_roles": (list_roles, [opensearchHost, opensearchUser, opensearchPass]),
               }
               
+              print("Received event: {}".format(action))
               try:
                   # Get the function and parameters from the dictionary and call the function
                   func, params = actions.get(action, (None, None))
                   if func:
-                      func(*params)
+                      return func(*params)
                   else:
                       raise Exception(f"Error: Action '{action}' not permitted.")
                   responseStatus = 'SUCCESS'
@@ -159,6 +166,7 @@ Resources:
 
           def get_secret(secret_name):
               # Get the secret from Secrets Manager
+              print("Get secret: {}".format(secret_name))
               try:
                   get_secret_value_response = secretsmanager.get_secret_value(SecretId=secret_name)
               except ClientError as e:
