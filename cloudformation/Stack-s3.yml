@@ -5,7 +5,7 @@ Description: Bucket S3 general porpuse
 Resources:
   S3Bucket:
     Type: 'AWS::S3::Bucket'
-    DeletionPolicy: Retain
+    DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub "dev-data-general-${AWS::Region}"
