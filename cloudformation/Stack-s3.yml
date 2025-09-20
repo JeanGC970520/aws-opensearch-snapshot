@@ -11,7 +11,7 @@ Resources:
       BucketName: !Sub "dev-data-general-${AWS::Region}"
       OwnershipControls:
         Rules:
-          - ObjectOwnership: ObjectWriter
+          - ObjectOwnership: BucketOwnerEnforced
       VersioningConfiguration:
         Status: Enabled
 
