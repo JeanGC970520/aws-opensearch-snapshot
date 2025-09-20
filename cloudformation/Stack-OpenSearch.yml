@@ -28,7 +28,7 @@ Resources:
       GroupName: !Sub "OpenSearch-${DomainName}-SecurityGroup"
       GroupDescription: 'Open Search security group'
       VpcId: !Ref VPCId
-      SecurityGroupEgress:
+      SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
