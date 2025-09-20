@@ -9,6 +9,9 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub "dev-data-general-${AWS::Region}"
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: ObjectWriter
       VersioningConfiguration:
         Status: Enabled
 
