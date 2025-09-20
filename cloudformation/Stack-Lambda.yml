@@ -85,6 +85,8 @@ Resources:
       Role: !GetAtt LambdaRole.Arn
       Timeout: !Ref LambdaTimeout
       MemorySize: !Ref LambdaMemory
+      Layers:
+        - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:layer:python-request:1"
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
