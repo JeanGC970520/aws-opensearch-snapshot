@@ -35,13 +35,13 @@ Resources:
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::{AWS::AccountId}:root'
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
           - Sid: Allow administration of the key
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::{AWS::AccountId}:user/jean'
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/jean'
             Action:
               - 'kms:Create*'
               - 'kms:Describe*'
