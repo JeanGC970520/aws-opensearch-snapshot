@@ -246,7 +246,8 @@ jobs:
           parameter-overrides: >-
             VPCId=${{ steps.vpc-info.outputs.vpc-id }},
             SubnetIds="${{ steps.vpc-info.outputs.subnet-ids }}",
-            DomainName='my-opensearch'
+            DomainName='my-opensearch',
+            CIDRblock=${{ steps.vpc-info.outputs.vpc-cidr }}
           capabilities: CAPABILITY_IAM
           tags: |
             Environment=production
@@ -286,7 +287,8 @@ jobs:
           parameter-overrides: >-
             VPCId=${{ steps.vpc-info.outputs.vpc-id }},
             SubnetIds="${{ steps.vpc-info.outputs.subnet-ids }}",
-            FunctionName='opensearch-lambda'
+            FunctionName='opensearch-lambda',
+            CIDRblock=${{ steps.vpc-info.outputs.vpc-cidr }}
           capabilities: CAPABILITY_IAM
           tags: |
             Environment=production
@@ -304,6 +306,7 @@ jobs:
             
           aws lambda invoke \
             --function-name $FUNCTION_NAME \
+            --cli-binary-format raw-in-base64-out \
             --payload '{"action": "list"}' \
             response.json
             
