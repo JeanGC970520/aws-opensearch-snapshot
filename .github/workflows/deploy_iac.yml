@@ -80,6 +80,54 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Deploy
 
+      # Obtener información de VPC y subnets por defecto
+      - name: Get default VPC info
+        id: vpc-info
+        run: |
+          DEFAULT_VPC=$(aws ec2 describe-vpcs \
+            --filters "Name=is-default,Values=true" \
+            --query 'Vpcs[0].VpcId' \
+            --output text)
+          
+          VPC_CIDR=$(aws ec2 describe-vpcs \
+            --vpc-ids $DEFAULT_VPC \
+            --query 'Vpcs[0].CidrBlock' \
+            --output text)
+          
+          SUBNET_IDS=$(aws ec2 describe-subnets \
+            --filters "Name=vpc-id,Values=$DEFAULT_VPC" \
+            --query 'Subnets[?MapPublicIpOnLaunch==`false`].[SubnetId]' \
+            --output text | tr '\n' ',' | sed 's/,$//')
+            
+          # Si no hay subnets privadas, usar las públicas
+          if [ -z "$SUBNET_IDS" ]; then
+            SUBNET_IDS=$(aws ec2 describe-subnets \
+              --filters "Name=vpc-id,Values=$DEFAULT_VPC" \
+              --query 'Subnets[0:1].SubnetId' \
+              --output text | tr '\t' ',')
+          fi
+          
+          # Validar que tenemos subnets
+          if [ -z "$SUBNET_IDS" ] || [ "$SUBNET_IDS" = "None" ]; then
+            echo "❌ Error: No se encontraron subnets en la VPC $DEFAULT_VPC"
+            exit 1
+          fi
+          
+          # Contar subnets
+          SUBNET_COUNT=$(echo $SUBNET_IDS | tr ',' '\n' | wc -l)
+          if [ $SUBNET_COUNT -lt 1 ]; then
+            echo "❌ Error: Se necesitan al menos 1 subnets, encontradas: $SUBNET_COUNT"
+            exit 1
+          fi
+          
+          echo "vpc-id=$DEFAULT_VPC" >> $GITHUB_OUTPUT
+          echo "vpc-cidr=$VPC_CIDR" >> $GITHUB_OUTPUT
+          echo "subnet-ids=$SUBNET_IDS" >> $GITHUB_OUTPUT
+          
+          echo "🔍 Using VPC: $DEFAULT_VPC"
+          echo "🔍 Using VPC CIDR: $VPC_CIDR"
+          echo "🔍 Using Subnets: $SUBNET_IDS (Count: $SUBNET_COUNT)"
+
       # Secrets Manager
       - name: Deploy Secrets Manager Stack
         uses: aws-actions/aws-cloudformation-github-deploy@v1
@@ -87,6 +135,10 @@ jobs:
           name: ${{ env.SECRET_MANAGER_STACK_NAME }}
           template: cloudformation/Stack-secret-manager.yml
           no-fail-on-empty-changeset: "1"
+          parameter-overrides: >-
+            VPCId=${{ steps.vpc-info.outputs.vpc-id }},
+            SubnetIds="${{ steps.vpc-info.outputs.subnet-ids }}",
+            CIDRblock=${{ steps.vpc-info.outputs.vpc-cidr }}
           capabilities: CAPABILITY_IAM
           tags: |
             Environment=production
@@ -187,54 +239,6 @@ jobs:
               "password": "${{ steps.secure_password.outputs.password }}"
             }
           secret-name: 'OPENSEARCH_MASTER_USER'
-      
-      # Obtener información de VPC y subnets por defecto
-      - name: Get default VPC info
-        id: vpc-info
-        run: |
-          DEFAULT_VPC=$(aws ec2 describe-vpcs \
-            --filters "Name=is-default,Values=true" \
-            --query 'Vpcs[0].VpcId' \
-            --output text)
-          
-          VPC_CIDR=$(aws ec2 describe-vpcs \
-            --vpc-ids $DEFAULT_VPC \
-            --query 'Vpcs[0].CidrBlock' \
-            --output text)
-          
-          SUBNET_IDS=$(aws ec2 describe-subnets \
-            --filters "Name=vpc-id,Values=$DEFAULT_VPC" \
-            --query 'Subnets[?MapPublicIpOnLaunch==`false`].[SubnetId]' \
-            --output text | tr '\n' ',' | sed 's/,$//')
-            
-          # Si no hay subnets privadas, usar las públicas
-          if [ -z "$SUBNET_IDS" ]; then
-            SUBNET_IDS=$(aws ec2 describe-subnets \
-              --filters "Name=vpc-id,Values=$DEFAULT_VPC" \
-              --query 'Subnets[0:1].SubnetId' \
-              --output text | tr '\t' ',')
-          fi
-          
-          # Validar que tenemos subnets
-          if [ -z "$SUBNET_IDS" ] || [ "$SUBNET_IDS" = "None" ]; then
-            echo "❌ Error: No se encontraron subnets en la VPC $DEFAULT_VPC"
-            exit 1
-          fi
-          
-          # Contar subnets
-          SUBNET_COUNT=$(echo $SUBNET_IDS | tr ',' '\n' | wc -l)
-          if [ $SUBNET_COUNT -lt 1 ]; then
-            echo "❌ Error: Se necesitan al menos 1 subnets, encontradas: $SUBNET_COUNT"
-            exit 1
-          fi
-          
-          echo "vpc-id=$DEFAULT_VPC" >> $GITHUB_OUTPUT
-          echo "vpc-cidr=$VPC_CIDR" >> $GITHUB_OUTPUT
-          echo "subnet-ids=$SUBNET_IDS" >> $GITHUB_OUTPUT
-          
-          echo "🔍 Using VPC: $DEFAULT_VPC"
-          echo "🔍 Using VPC CIDR: $VPC_CIDR"
-          echo "🔍 Using Subnets: $SUBNET_IDS (Count: $SUBNET_COUNT)"
 
       # Deploy OpenSearch first
       - name: Deploy OpenSearch Stack
