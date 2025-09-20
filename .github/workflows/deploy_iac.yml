@@ -145,14 +145,45 @@ jobs:
             exit 1
           }
 
-      - name: Generate and store master user info
+      - name: Generate secure password
+        id: secure_password
+        run: |
+          python3 << 'EOF'
+          import random
+          import string
+          import os
+          
+          lowercase = string.ascii_lowercase
+          uppercase = string.ascii_uppercase
+          digits = string.digits
+          special = "!@#$%^&*()-_=+"
+          
+          password = [
+              random.choice(lowercase),
+              random.choice(uppercase),
+              random.choice(digits),
+              random.choice(special)
+          ]
+          
+          all_chars = lowercase + uppercase + digits + special
+          for _ in range(8):
+              password.append(random.choice(all_chars))
+          
+          random.shuffle(password)
+          final_password = ''.join(password)
+          
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'password={final_password}\n')
+          EOF
+
+      - name: Store master user info
         uses: ./.github/actions/set_secret
         with:
           secret-arn: ${{ steps.opensearch_info.outputs.secret_arn }}
           secret-content: |
             {
               "username": "OpenSearhUserMaster",
-              "password": "EkQoSBb48bD9GYnWGx"
+              "password": "${{ steps.secure_password.outputs.password }}"
             }
           secret-name: 'OPENSEARCH_MASTER_USER'
         if: ${{ !contains(fromJSON(steps.opensearch_info.outputs.secret_info), 'AWSCURRENT') }}
