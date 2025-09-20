@@ -82,8 +82,7 @@ Resources:
           MasterUserPassword: !Join [ "", [ "{{resolve:secretsmanager:", Fn::ImportValue: !Sub "secret-manager-OPENSEARCH-MASTER-USER-arn", ':SecretString:password}}' ] ]
       EncryptionAtRestOptions:
         Enabled: true
-        KmsKeyId:
-          Fn::ImportValue: !Ref OpenSearchKMSKey
+        KmsKeyId: !Ref OpenSearchKMSKey
       AccessPolicies:
         Version: '2012-10-17'
         Statement:
