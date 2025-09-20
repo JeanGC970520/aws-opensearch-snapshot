@@ -6,6 +6,7 @@ Resources:
   S3Bucket:
     Type: 'AWS::S3::Bucket'
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub "dev-data-general-${AWS::Region}"
       AccessControl: Private
@@ -23,7 +24,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
-            Resource: !Sub "arn:aws:s3:::dev-data-general-${AWS::Region}/*"
+            Resource: !Sub "arn:${AWS::Partition}:s3:::dev-data-general-${AWS::Region}/*"
             Condition:
               StringNotEquals:
                 's3:authType': "REST-HEADER"
@@ -32,8 +33,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub "arn:aws:s3:::dev-data-general-${AWS::Region}"
-              - !Sub "arn:aws:s3:::dev-data-general-${AWS::Region}/*"
+              - !Sub "arn:${AWS::Partition}:s3:::dev-data-general-${AWS::Region}"
+              - !Sub "arn:${AWS::Partition}:s3:::dev-data-general-${AWS::Region}/*"
             Condition:
               Bool:
                 'aws:SecureTransport': "false"
