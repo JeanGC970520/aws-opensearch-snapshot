@@ -161,7 +161,12 @@ Outputs:
     Export:
       Name: 'OpenSearch-SecurityGroup'
 
+  OpenSearchAssumeRoleArn:
+    Value: !GetAtt OpenSearchAssumeRole.Arn
+    Export:
+      Name: 'OpenSearch-Assume-Role'
+
   VPCId:
     Value: !Ref VPCId
     Export:
-      Name: '${AWS::StackName}-VPC'
+      Name: !Sub '${AWS::StackName}-VPC'
