@@ -133,9 +133,12 @@ Resources:
               # Dictionary with the allowed actions and their parameters
               actions = {
                   "list": (list_snapshots, [opensearchHost, opensearchUser, opensearchPass]),
+                  "validate_before_register": (validate_before_register, [opensearchHost, opensearchUser, opensearchPass, event.get('repository'), event.get('region'), event.get('role_arn')]),
                   "register_repository": (register_repository_for_snapshot, [opensearchHost, opensearchUser, opensearchPass, event.get('repository'), event.get('region'), event.get('role_arn')]),
                   "take_snapshot": (take_snapshot, [opensearchHost, opensearchUser, opensearchPass, event.get('repository')]),
-                  "get_info_automatic_repo": (get_existing_repo_config,[opensearchHost, opensearchUser, opensearchPass])
+                  "get_info_automatic_repo": (get_existing_repo_config,[opensearchHost, opensearchUser, opensearchPass]),
+                  "list_mappings": (list_rolesmapings, [opensearchHost, opensearchUser, opensearchPass]),
+                  "list_roles": (list_roles, [opensearchHost, opensearchUser, opensearchPass]),
               }
               
               try:
@@ -187,13 +190,13 @@ Resources:
               for snapshot_data in snapshots_list:
                   print(snapshot_data)
 
-          def register_repository_for_snapshot(opensearchHost, opensearchUser, opensearchPass, repository, region, iamRole):
+          def register_repository_for_snapshot(opensearchHost, opensearchUser, opensearchPass, repository, region, arn_role):
               payload = {
                   "type": "s3",
                   "settings": {
                       "bucket": repository,
                       "region": region,
-                      "role_arn": iamRole,
+                      "role_arn": arn_role,
                       "base_path": "opensearch/snapshots",
                   }
               }
@@ -205,7 +208,7 @@ Resources:
               print(r.status_code)
               print(r.text)
 
-          def validate_before_register(opensearchHost, opensearchUser, opensearchPass, bucket_name, region, role_arn):
+          def validate_before_register(opensearchHost, opensearchUser, opensearchPass, bucket_name, region, arn_role):
               # 1. Verificar que el bucket existe y es accesible
               import boto3
               s3_client = boto3.client('s3', region_name=region)
@@ -220,7 +223,7 @@ Resources:
               # 2. Verificar que el rol ARN es válido
               iam_client = boto3.client('iam', region_name=region)
               try:
-                  role_name = role_arn.split('/')[-1]
+                  role_name = arn_role.split('/')[-1]
                   iam_client.get_role(RoleName=role_name)
                   print(f"✅ Rol {role_name} existe")
               except Exception as e:
@@ -245,6 +248,35 @@ Resources:
               r = requests.get(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
               print(f"Existing repo config: {r.text}")
               return r
+
+
+          def list_rolesmapings(opensearchHost, opensearchUser, opensearchPass):
+              print("Listing mappings roles")
+              get_roles_url = f"{opensearchHost}/_opendistro/_security/api/rolesmapping/"
+              response = requests.get(get_roles_url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+              print("Response status: {}".format(response.status_code))
+              formatted_json_string = response.json()
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Content-Type': 'application/json'
+                  },
+                  'body': formatted_json_string
+              }
+
+          def list_roles(opensearchHost, opensearchUser, opensearchPass):
+              print("Listing roles")
+              get_roles_url = f"{opensearchHost}/_opendistro/_security/api/roles/"
+              response = requests.get(get_roles_url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+              print("Response status: {}".format(response.status_code))
+              formatted_json_string = response.json()
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Content-Type': 'application/json'
+                  },
+                  'body': formatted_json_string
+              }
 
 Outputs:
   LambdaArn:
