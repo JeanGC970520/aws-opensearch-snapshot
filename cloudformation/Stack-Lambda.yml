@@ -21,7 +21,7 @@ Parameters:
     Default: 'opensearch-lambda'
 
   LambdaMemory:
-    ype: Number
+    Type: Number
     Description: Lambda Memory Size
     Default: 512
 
@@ -109,6 +109,9 @@ Resources:
 
           print('Loading function')
 
+          # AWS Clients
+          secretsmanager = boto3.client('secretsmanager')
+
           def handler(event, context):
               region = os.environ['REGION']
 
@@ -116,7 +119,7 @@ Resources:
               action = event['action']
 
               # URL OpenSearch
-              opensearchHost = os.environ['OPENSEARCH_ENDPOINT'] 
+              opensearchHost = os.environ['OPENSEARCH_ENDPOINT']
 
               # Get Master User/Pass Opensearch
               opensearch_master_user = get_secret(os.environ['OPENSEARCH_MASTER_USER'])
