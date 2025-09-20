@@ -166,7 +166,7 @@ jobs:
           ]
           
           all_chars = lowercase + uppercase + digits + special
-          for _ in range(8):
+          for _ in range(24):
               password.append(random.choice(all_chars))
           
           random.shuffle(password)
@@ -177,6 +177,7 @@ jobs:
           EOF
 
       - name: Store master user info
+        if: ${{ !contains(fromJSON(steps.opensearch_info.outputs.secret_info), 'AWSCURRENT') }}
         uses: ./.github/actions/set_secret
         with:
           secret-arn: ${{ steps.opensearch_info.outputs.secret_arn }}
@@ -186,7 +187,6 @@ jobs:
               "password": "${{ steps.secure_password.outputs.password }}"
             }
           secret-name: 'OPENSEARCH_MASTER_USER'
-        if: ${{ !contains(fromJSON(steps.opensearch_info.outputs.secret_info), 'AWSCURRENT') }}
       
       # Obtener información de VPC y subnets por defecto
       - name: Get default VPC info
