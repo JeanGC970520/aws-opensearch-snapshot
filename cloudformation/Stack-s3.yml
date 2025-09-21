@@ -40,3 +40,9 @@ Resources:
             Condition:
               Bool:
                 'aws:SecureTransport': "false"
+
+Outputs:
+  S3BucketArn:
+    Value: !GetAtt S3Bucket.Arn
+    Export:
+      Name: 'S3-Arn'
