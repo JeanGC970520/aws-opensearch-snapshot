@@ -69,6 +69,15 @@ Resources:
                 Resource:
                   - Fn::ImportValue: "secret-manager-OPENSEARCH-MASTER-USER-arn"
                   - !Join [ "/", [ Fn::ImportValue: "secret-manager-OPENSEARCH-MASTER-USER-arn", '*' ] ]
+              - Effect: Allow
+                Action:
+                  - "es:ESHttpPost"
+                  - "es:ESHttpPut"
+                  - "es:ESHttpGet"
+                  - "es:ESHttpDelete"
+                Resource:
+                  - Fn::ImportValue: "OpenSearch-Arn"
+                  - !Join [ "/", [ Fn::ImportValue: "OpenSearch-Arn", '*' ] ]
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -148,11 +157,14 @@ Resources:
               actions = {
                   "list": (list_snapshots, [opensearchHost, opensearchUser, opensearchPass]),
                   "validate_before_register": (validate_before_register, [opensearchHost, opensearchUser, opensearchPass, event.get('repository'), event.get('region'), event.get('role_arn')]),
+                  "check_snap_config": (diagnose_snapshot_setup, [opensearchHost, opensearchUser, opensearchPass]),
                   "register_repository": (register_repository_for_snapshot, [opensearchHost, opensearchUser, opensearchPass, event.get('repository'), event.get('region'), event.get('role_arn')]),
+                  "register_repository_iam": (register_repository_for_snapshot_iam, [opensearchHost, event.get('repository'), event.get('region'), event.get('role_arn')]),
                   "take_snapshot": (take_snapshot, [opensearchHost, opensearchUser, opensearchPass, event.get('repository')]),
                   "get_info_automatic_repo": (get_existing_repo_config,[opensearchHost, opensearchUser, opensearchPass]),
                   "list_mappings": (list_rolesmapings, [opensearchHost, opensearchUser, opensearchPass]),
                   "list_roles": (list_roles, [opensearchHost, opensearchUser, opensearchPass]),
+                  "map_role": (associate_backendrole_role, [opensearchHost, event.get("backend_role"), event.get("opensearch_role"), opensearchUser, opensearchPass])
               }
               
               logger.info("Received event: {}".format(action))
@@ -165,7 +177,7 @@ Resources:
                       raise Exception(f"Error: Action '{action}' not permitted.")
                   responseStatus = 'SUCCESS'
               except Exception as e:
-                  logger.error('Failed to process:', e)
+                  logger.error('Failed to process: {}'.format(e))
                   responseStatus = 'FAILED'
 
           def get_secret(secret_name):
@@ -215,22 +227,84 @@ Resources:
               }
 
           def register_repository_for_snapshot(opensearchHost, opensearchUser, opensearchPass, repository, region, arn_role):
+              logger.info("Register repository: {}".format(repository))
+              payload = {
+                  "type": "s3",
+                  "settings": {
+                      "bucket": f"{repository}",
+                      "region": f"{region}",
+                      "role_arn": f"{arn_role}",
+                      "base_path": "opensearch/snapshots",
+                  }
+              }
+              headers = {"Content-Type": "application/json"}
+              url = f'{opensearchHost}/_snapshot/manual_repository'
+              
+              try:
+                  response = requests.put(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass), json=payload, headers=headers)
+                  response.raise_for_status()
+                  logger.info(f"Repository registered successfully: {response.status_code}")
+                  return response.json()
+              except requests.exceptions.RequestException as e:
+                  logger.error(f"Failed to register repository: {e}")
+                  if hasattr(e, 'response') and e.response is not None:
+                      logger.error(f"Response content: {e.response.text}")
+                  raise
+
+          def register_repository_for_snapshot_iam(opensearchHost, repository, region, arn_role):
+              """Usar autenticación IAM en lugar de usuario/contraseña"""
+
+              from opensearchpy import OpenSearch, RequestsHttpConnection
+              from aws_requests_auth.boto_utils import BotoAWSRequestsAuth
+
+              logger.info("Register repository: {}".format(repository))
+              logger.info("Register region: {}".format(region))
+              logger.info("Register arn_role: {}".format(arn_role))
+              
+              # Obtener credenciales del rol de Lambda
+              # session = boto3.Session()
+              # credentials = session.get_credentials()
+              host = opensearchHost.replace('https://', '')
+              
+              # Configurar autenticación AWS
+              awsauth = BotoAWSRequestsAuth(
+                  # aws_access_key=credentials.aws_access_key,
+                  # aws_secret_access_key=credentials.aws_secret_access_key,
+                  aws_host=host,
+                  aws_region=region,
+                  aws_service='es'
+              )
+              
+              # Cliente OpenSearch con autenticación IAM
+              client = OpenSearch(
+                  hosts=[{'host': host, 'port': 443}],
+                  http_auth=awsauth,
+                  use_ssl=True,
+                  verify_certs=True,
+                  connection_class=RequestsHttpConnection
+              )
+              
+              # Registrar repositorio
               payload = {
                   "type": "s3",
                   "settings": {
                       "bucket": repository,
                       "region": region,
                       "role_arn": arn_role,
-                      "base_path": "opensearch/snapshots",
+                      "base_path": "opensearch/snapshots"
                   }
               }
-              headers = {"Content-Type": "application/json"}
-              url = opensearchHost + '/_snapshot/' + 'genai-snapshots'
-              response = requests.put(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass), json=payload, headers=headers)
-              response.raise_for_status()
-
-              print(response.status_code)
-              print(response.text)
+              
+              try:
+                  response = client.snapshot.create_repository(
+                      repository='manual_repository',
+                      body=payload
+                  )
+                  print(f"Repository registered successfully: {response}")
+                  return response
+              except Exception as e:
+                  print(f"Error: {e}")
+                  raise
 
           def validate_before_register(opensearchHost, opensearchUser, opensearchPass, bucket_name, region, arn_role):
               # 1. Verificar que el bucket existe y es accesible
@@ -257,10 +331,89 @@ Resources:
               # 3. Ahora intentar registrar el repositorio
               return register_repository_simple(opensearchHost, opensearchUser, opensearchPass, region, role_arn)
 
+          def check_cluster_permissions(opensearchHost, opensearchUser, opensearchPass):
+              """Verifica los permisos del cluster para snapshots"""
+              
+              # Verificar información del cluster
+              url_cluster = f'{opensearchHost}/_cluster/health'
+              response = requests.get(url_cluster, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+              print(f"Cluster health: {response.status_code}")
+              
+              # Verificar repositorios existentes
+              url_repos = f'{opensearchHost}/_snapshot'
+              response = requests.get(url_repos, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+              print(f"Existing repositories: {response.status_code}")
+              if response.status_code == 200:
+                  print(response.json())
+              
+              # Verificar configuración del cluster
+              url_settings = f'{opensearchHost}/_cluster/settings'
+              response = requests.get(url_settings, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+              print(f"Cluster settings: {response.status_code}")
+              
+              return response.status_code == 200
+
+          def verify_snapshot_configuration(opensearchHost, opensearchUser, opensearchPass):
+              """Verifica la configuración específica para snapshots"""
+              
+              headers = {"Content-Type": "application/json"}
+              
+              # Verificar si el path.repo está configurado
+              url = f'{opensearchHost}/_nodes/settings'
+              response = requests.get(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass), headers=headers)
+              
+              if response.status_code == 200:
+                  data = response.json()
+                  for node_id, node_data in data.get('nodes', {}).items():
+                      settings = node_data.get('settings', {})
+                      path_repo = settings.get('path', {}).get('repo')
+                      print(f"Node {node_id} path.repo: {path_repo}")
+              
+              return response.status_code == 200
+
+          def test_snapshot_permissions(opensearchHost, opensearchUser, opensearchPass):
+              """Prueba diferentes endpoints relacionados con snapshots"""
+              
+              endpoints = [
+                  '/_snapshot',
+                  '/_cluster/settings',
+                  '/_nodes/settings'
+              ]
+              
+              for endpoint in endpoints:
+                  url = f'{opensearchHost}{endpoint}'
+                  try:
+                      response = requests.get(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+                      print(f"GET {endpoint}: {response.status_code}")
+                      if response.status_code != 200:
+                          print(f"  Error: {response.text}")
+                  except Exception as e:
+                      print(f"GET {endpoint}: Error - {e}")
+
+          def diagnose_snapshot_setup(opensearchHost, opensearchUser, opensearchPass):
+              """Función completa para diagnosticar la configuración de snapshots"""
+              
+              print("=== Diagnóstico de configuración de snapshots ===")
+              
+              # Test básico de conectividad
+              try:
+                  response = requests.get(f'{opensearchHost}', auth=HTTPBasicAuth(opensearchUser, opensearchPass))
+                  print(f"✓ Conectividad básica: {response.status_code}")
+              except Exception as e:
+                  print(f"✗ Error de conectividad: {e}")
+                  return False
+              
+              # Verificar permisos para snapshots
+              check_cluster_permissions(opensearchHost, opensearchUser, opensearchPass)
+              verify_snapshot_configuration(opensearchHost, opensearchUser, opensearchPass)
+              test_snapshot_permissions(opensearchHost, opensearchUser, opensearchPass)
+              
+              return True
+
           def take_snapshot(opensearchHost, opensearchUser, opensearchPass, repository):
 
               snapshot_name = datetime.date.today().strftime("%Y-%m-%d")
-              url = f'{opensearchHost}/_snapshot/genai-snapshots/{snapshot_name}'
+              url = f'{opensearchHost}/_snapshot/manual_repository/{snapshot_name}'
               response = requests.put(url, auth=HTTPBasicAuth(opensearchUser, opensearchPass))
               response.raise_for_status()
 
@@ -308,6 +461,28 @@ Resources:
                   },
                   'body': formatted_json_string
               }
+
+              import boto3
+
+          def associate_backendrole_role(opensearchDomainEndpoint, backendRole, opensearchRoleName, username, password):
+              # Obtain current role data in OpenSearch
+              get_role_url = f"{opensearchDomainEndpoint}/_opendistro/_security/api/rolesmapping/{opensearchRoleName}"
+              response = requests.get(get_role_url, auth=(username, password))
+              # Verify response
+              if response.status_code == 200:
+                  role_data = response.json()
+                  # Add the new user to the existing users in the role
+                  if backendRole not in role_data[opensearchRoleName]['backend_roles']:
+                      role_data[opensearchRoleName]['backend_roles'].append(backendRole)
+                      role_data = {"backend_roles": role_data[opensearchRoleName]['backend_roles']}
+                      # Send a PUT request to update the role with the new user
+                      update_role_url = f"{opensearchDomainEndpoint}/_opendistro/_security/api/rolesmapping/{opensearchRoleName}"
+                      update_response = requests.put(update_role_url, auth=(username, password), json=role_data)
+                      print(update_response.text)
+              if response.status_code == 404:
+                  backend_role_data = {"backend_roles": [backendRole]}
+                  response = requests.put(get_role_url, auth=(username, password), json=backend_role_data)
+                  print(response.text)
 
 Outputs:
   LambdaArn:
