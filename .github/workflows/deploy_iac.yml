@@ -240,6 +240,19 @@ jobs:
             }
           secret-name: 'OPENSEARCH_MASTER_USER'
 
+      # Deploy S3 bucket
+      - name: Deploy S3 Stack
+        uses: aws-actions/aws-cloudformation-github-deploy@v1
+        with:
+          name: ${{ env.S3_STACK_NAME }}
+          template: cloudformation/Stack-s3.yml
+          no-fail-on-empty-changeset: "1"
+          capabilities: CAPABILITY_IAM
+          tags: |
+            Environment=production
+            Project=opensearch-lambda
+            ManagedBy=github-actions
+
       # Deploy OpenSearch first
       - name: Deploy OpenSearch Stack
         uses: aws-actions/aws-cloudformation-github-deploy@v1
@@ -267,19 +280,6 @@ jobs:
           aws cloudformation wait stack-update-complete \
             --stack-name ${{ env.OPENSEARCH_STACK_NAME }}
           echo "✅ OpenSearch stack is ready"
-
-      # Deploy S3 bucket
-      - name: Deploy S3 Stack
-        uses: aws-actions/aws-cloudformation-github-deploy@v1
-        with:
-          name: ${{ env.S3_STACK_NAME }}
-          template: cloudformation/Stack-s3.yml
-          no-fail-on-empty-changeset: "1"
-          capabilities: CAPABILITY_IAM
-          tags: |
-            Environment=production
-            Project=opensearch-lambda
-            ManagedBy=github-actions
 
       # Deploy Lambda stack
       - name: Deploy Lambda Stack
