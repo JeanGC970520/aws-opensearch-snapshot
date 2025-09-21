@@ -106,6 +106,7 @@ Resources:
       MemorySize: !Ref LambdaMemory
       Layers:
         - !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:layer:python-request:1"
+        - !Sub "arn:${AWS::Partition}:lambda:us-east-1:810412312217:layer:OpenSearch-py:2"
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
